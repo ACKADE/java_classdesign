@@ -4,6 +4,7 @@ import javax.swing.event.TreeSelectionListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
+import java.sql.*;
 import java.util.*;
 import java.util.List;
 
@@ -79,7 +80,7 @@ public  class ClassInfoApp {
     }
 
     // ---------- UI ----------
-    private final Map<String, Map<String, List<Student>>> data = mockData();
+    private final Map<String, Map<String, List<Student>>> data = loadData();
 
     private JTree tree;
     private JTable table;
@@ -149,7 +150,46 @@ public  class ClassInfoApp {
         return new DefaultTreeModel(root);
     }
 
-    // ---------- 模拟数据 ----------
+    // ---------- 从数据库加载数据，失败时回退到模拟数据 ----------
+    private Map<String, Map<String, List<Student>>> loadData() {
+        try {
+            return loadFromDatabase();
+        } catch (Exception e) {
+            System.err.println("数据库加载失败，使用模拟数据：" + e.getMessage());
+            return mockData();
+        }
+    }
+
+    private Map<String, Map<String, List<Student>>> loadFromDatabase() throws Exception {
+        Class.forName("com.mysql.cj.jdbc.Driver");
+        String url = "jdbc:mysql://127.0.0.1:3306/text";
+        String user = "root";
+        String password = "liyouxuan81";
+
+        Map<String, Map<String, List<Student>>> m = new LinkedHashMap<>();
+
+        try (Connection conn = DriverManager.getConnection(url, user, password);
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(
+                     "SELECT student_id, name, gender, age, major, class_name FROM cs_students ORDER BY major, class_name, student_id")) {
+
+            while (rs.next()) {
+                String studentId = rs.getString("student_id");
+                String name      = rs.getString("name");
+                String gender    = rs.getString("gender");
+                int    age       = rs.getInt("age");
+                String major     = rs.getString("major");
+                String className = rs.getString("class_name");
+
+                m.computeIfAbsent(major, k -> new LinkedHashMap<>())
+                 .computeIfAbsent(className, k -> new ArrayList<>())
+                 .add(new Student(studentId, name, gender, age));
+            }
+        }
+        return m;
+    }
+
+    // ---------- 模拟数据（数据库不可用时的回退） ----------
     private Map<String, Map<String, List<Student>>> mockData() {
         Map<String, Map<String, List<Student>>> m = new LinkedHashMap<>();
 
